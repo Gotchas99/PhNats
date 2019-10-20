@@ -11,21 +11,16 @@ BaselineOfNats >> baseline: spec [
 		for: #(common)
 		do: [ "Dependencies"
 			self stick: spec.
-			spec
-				baseline: 'NeoJSON'
-				with: [ spec repository: 'github://svenvc/NeoJSON/repository' ].
-			spec
-				baseline: 'ProtoBuf'
-				with: [ spec repository: 'github://jvdsandt/protobuf-smalltalk/' ].
+			self neoJSON: spec.
+			self protoBuf: spec.
 			"Packages"
 			spec
 				package: 'CAs-Nats' with: [ spec requires: #('NeoJSON' 'Stick') ];
-				package: 'CAs-Nats-Tests' with: [ spec requires: 'CAs-Nats' ].
-			spec group: 'default' with: #('CAs-Nats' 'CAs-Nats-Tests').
-			spec
-				group: 'development'
-				with: #('default' 'LibGit-Tests' 'LibGit-Patches' 'LibGit-GT').
-			spec group: 'tests' with: #('LibGit-Tests') ]
+				package: 'CAs-Nats-Tests' with: [ spec requires: 'CAs-Nats' ].	
+					"Groups"
+			spec group: 'default' with: #('CAs-Nats').
+			spec group: 'tests' with: #('CAs-Nats-Tests').
+			spec group: 'development' with: #('default' 'tests') ]
 ]
 
 { #category : #baseline }
@@ -34,13 +29,30 @@ BaselineOfNats >> manualLoading [
 		baseline: 'Stick';
 		repository: 'github://mumez/Stick/repository';
 		load.
-		Metacello new
-  repository: 'github://svenvc/NeoJSON/repository';
-  baseline: 'NeoJSON';
-  load.
+	Metacello new
+		repository: 'github://svenvc/NeoJSON/repository';
+		baseline: 'NeoJSON';
+		load.Metacello new
+   baseline: 'Protobuf';
+   repository: 'github://jvdsandt/protobuf-smalltalk';
+   load.
 ]
 
-{ #category : #baseline }
+{ #category : #dependencies }
+BaselineOfNats >> neoJSON: spec [
+	spec
+		baseline: 'NeoJSON'
+		with: [ spec repository: 'github://svenvc/NeoJSON/repository' ]
+]
+
+{ #category : #dependencies }
+BaselineOfNats >> protoBuf: spec [
+	spec
+		baseline: 'ProtoBuf'
+		with: [ spec repository: 'github://jvdsandt/protobuf-smalltalk/' ]
+]
+
+{ #category : #dependencies }
 BaselineOfNats >> stick: spec [
 	spec
 		baseline: 'Stick'
