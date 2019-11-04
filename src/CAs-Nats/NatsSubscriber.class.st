@@ -9,33 +9,33 @@ Class {
 	#category : #'CAs-Nats-Sample'
 }
 
-{ #category : #'as yet unclassified' }
+{ #category : #accessing }
 NatsSubscriber >> id: aString [ 
 	id:= aString
 ]
 
-{ #category : #accessing }
+{ #category : #action }
 NatsSubscriber >> start [
 	nc := NatsClient openOnHostNamed: 'ux5'.
 
 ]
 
-{ #category : #accessing }
+{ #category : #action }
 NatsSubscriber >> stop [
 	nc close
 ]
 
-{ #category : #accessing }
+{ #category : #action }
 NatsSubscriber >> sub [
 	sid := nc
 		sub: 'foo'
 		action: [ :msg | 
 			Transcript
 				cr;
-				show: id,':GOT MESSAGE:' , msg ]
+				show: id , ':GOT MESSAGE:' , msg ] 
 ]
 
-{ #category : #accessing }
+{ #category : #action }
 NatsSubscriber >> unsub [
 	nc unsub: sid.
 ]

@@ -10,7 +10,7 @@ Class {
 
 { #category : #accessing }
 NatsGenerator >> msg [
-	^ 'Again another message'
+	^ 'Again another message at ',Time now print24
 ]
 
 { #category : #accessing }
@@ -18,7 +18,7 @@ NatsGenerator >> running [
 ^	running
 ]
 
-{ #category : #accessing }
+{ #category : #action }
 NatsGenerator >> start [
 	nc := NatsClient openOnHostNamed: 'ux5'.
 	running := true.
@@ -28,7 +28,7 @@ NatsGenerator >> start [
 	nc close ] forkAt: Processor userBackgroundPriority
 ]
 
-{ #category : #accessing }
+{ #category : #action }
 NatsGenerator >> stop [
 	running := false
 ]

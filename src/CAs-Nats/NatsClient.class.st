@@ -63,7 +63,9 @@ NatsClient >> announcer [
 { #category : #api }
 NatsClient >> close [
 	stick
-		ifNotNil: [ stick logger info: ' >>>Closing connection...'.self unregisterSubscriptions.
+		ifNotNil: [ stick logger info: ' >>>Closing connection...'.
+			self unregisterSubscriptions.
+			announcer ifNotNil: [ announcer subscriptions reset ].
 			stick release.
 			stick := nil ]
 ]
@@ -109,10 +111,12 @@ NatsClient >> createInbox [
 
 { #category : #ops }
 NatsClient >> err: aLine [
+| msg |
+msg:= ('''' split: aLine)second.
 	self announcer
 		announce:
-			(NatsAnnouncement new
-				event: #error;
+			(NatsError  new
+				errorMsg: msg;
 				yourself).
 ]
 
@@ -126,21 +130,18 @@ NatsClient >> info: aLine [
 	| json |
 	json := aLine asString withoutPrefix: 'INFO '.
 	serverInfo := NeoJSONReader fromString: json.
-	self announcer
-		announce:
-			(NatsAnnouncement new
-				event: #info;
-				yourself).
+	
 	stick beSwitchyWithAll: self urls.
-	self connect
+	self connect.
+	self announcer announce: NatsConnect new.
 ]
 
 { #category : #initialization }
 NatsClient >> initialize [
-sid := 0 .
+	sid := 0.
 	connectInfo := {('verbose' -> false).
 	('tls_required' -> false).
-	('name' -> 'phats').
+	('name' -> 'phnats').
 	('version' -> '0.1').
 	('protocol' -> 1)} asDictionary.
 	serverInfo := Dictionary new.
@@ -149,31 +150,58 @@ sid := 0 .
 ]
 
 { #category : #actions }
-NatsClient >> log: anInteger [
-	stick logger logLevel: anInteger 
+NatsClient >> log: aString [
+	self deprecated: 'use logger instead'.
+	stick logger logLevel: aString
+]
+
+{ #category : #actions }
+NatsClient >> logLevel: anInteger [
+	stick logger logLevel: anInteger
+]
+
+{ #category : #actions }
+NatsClient >> logger [
+^	stick logger
 ]
 
 { #category : #ops }
 NatsClient >> msg: aLine [
-	| line |
-	
+	| line reply |
 	line := Character space split: aLine asString.
-stick logger debug: 'msg: with splits: ' , line asString.
-	stick onData: (self msgBlockForSid: line third size: line fourth)
+	line size = 5
+		ifTrue: [ reply := line fourth ].
+	stick logger debug: 'msg: with splits: ' , line asString.
+	stick onData: (self msgBlockForSid: line third size: line last reply:reply)
 ]
 
 { #category : #actions }
 NatsClient >> msgBlockForSid: aSid size: sz [
 	^ [ :charcode | 
 	stick logger debug: ' msg#' , charcode asString , ' '.
-	msgStream size < sz asInteger
-		ifTrue: [ msgStream nextPut: charcode ]
-		ifFalse: [ self
+	[msgStream size < sz asInteger]
+		whileTrue: [ msgStream nextPut: charcode ].
+self
 				processMessage: msgStream contents asString
 				forSid: aSid
 				size: sz.
 			msgStream resetContents.
-			stick onData: self controlBlock ] ]
+			stick onData: self controlBlock ] 
+]
+
+{ #category : #actions }
+NatsClient >> msgBlockForSid: aSid size: sz reply: reply [
+	^ [ :charcode | 
+	stick logger debug: ' msg#' , charcode asString , ' '.
+	( msgStream size < sz asInteger )
+		ifTrue: [ msgStream nextPut: charcode ]
+		ifFalse:[
+	self
+		processMessage: msgStream contents asString
+		forSid: aSid
+		reply: reply.
+	msgStream resetContents.
+	stick onData: self controlBlock ]]
 ]
 
 { #category : #accessing }
@@ -217,10 +245,7 @@ NatsClient >> ping [
 
 { #category : #ops }
 NatsClient >> ping: aLine [
- self announcer
-    announce: (NatsAnnouncement new
-                event:#ping;
-                yourself).
+	self announcer announce: NatsPing new. 
 	self sendCommand: 'PONG'
 ]
 
@@ -250,6 +275,20 @@ NatsClient >> processControl: aLine [
 ]
 
 { #category : #protocol }
+NatsClient >> processMessage: line forSid: aSid reply: reply [
+	| action sub msg |
+	stick logger
+		debug: 'msg for sid: ' , sid asString , ', content:' , line.
+	msg := Dictionary new
+		at: 'body' put: line;
+		at: 'reply' put: reply;
+		yourself.
+	sub := subscriptions at: aSid ifAbsent: [ ^ self ].
+	action := sub at: 'action' ifAbsent: [ ^ self ].
+	action value: msg
+]
+
+{ #category : #protocol }
 NatsClient >> processMessage: line forSid: aSid size: sz [
 	| action sub |
 	stick logger
@@ -257,6 +296,11 @@ NatsClient >> processMessage: line forSid: aSid size: sz [
 	sub := subscriptions at: aSid ifAbsent: [ ^ self ].
 	action := sub at: 'action' ifAbsent: [ ^ self ].
 	action value: line
+]
+
+{ #category : #api }
+NatsClient >> pub: subject [ 
+	self pub: subject payload: '' 
 ]
 
 { #category : #api }
@@ -285,11 +329,22 @@ NatsClient >> registerSubscriptions [
 				sid: (sub at: 'sid') ]
 ]
 
+{ #category : #api }
+NatsClient >> requestOne: subject payload: aByteArray action: aBlock [
+	| inbox |
+	inbox := self createInbox.
+	self
+		sub: inbox
+		action: [ :msg | 
+			
+			aBlock value: msg .self unsub: inbox.].
+	self pub: subject payload: aByteArray replyTo: inbox
+]
+
 { #category : #protocol }
 NatsClient >> sendCommand: aCmd [
 	| bytes |
-	stick logger info: 'sendCommand: ' , aCmd.
-	
+	stick logger debug: 'sendCommand: ' , aCmd.
 	bytes := (aCmd , String crlf) asByteArray.
 	stick send: bytes
 ]

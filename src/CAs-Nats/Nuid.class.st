@@ -61,7 +61,7 @@ Nuid class >> startUp: isImageStarting [
 Nuid >> fillSeq [
 	| n |
 	n := seq.
-	totalLen to: preLen + 1 by: -1 do: [ :ix | buf at: ix put: (digits at: n \\ base) asciiValue. n:= (n/base)floor ]
+	totalLen to: preLen + 1 by: -1 do: [ :ix | buf at: ix put: (digits at: ((n \\ base)+1)) asciiValue. n:= (n/base)floor ]
 ]
 
 { #category : #initialization }
