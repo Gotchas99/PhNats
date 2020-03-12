@@ -15,9 +15,10 @@ BaselineOfNats >> baseline: spec [
 			self protoBuf: spec.
 			"Packages"
 			spec
-				package: 'CAs-Nats' with: [ spec requires: #('NeoJSON' 'Stick') ];
-				package: 'CAs-Nats-Tests' with: [ spec requires: 'CAs-Nats' ].	
-					"Groups"
+				package: 'CAs-Nats'
+					with: [ spec requires: #('NeoJSON' 'Stick' 'Protobuf') ];
+				package: 'CAs-Nats-Tests' with: [ spec requires: 'CAs-Nats' ].
+			"Groups"
 			spec group: 'default' with: #('CAs-Nats').
 			spec group: 'tests' with: #('CAs-Nats-Tests').
 			spec group: 'development' with: #('default' 'tests') ]
@@ -32,10 +33,11 @@ BaselineOfNats >> manualLoading [
 	Metacello new
 		repository: 'github://svenvc/NeoJSON/repository';
 		baseline: 'NeoJSON';
-		load.Metacello new
-   baseline: 'Protobuf';
-   repository: 'github://jvdsandt/protobuf-smalltalk';
-   load.
+		load.
+	Metacello new 
+		baseline: 'Protobuf';
+		repository: 'github://jvdsandt/protobuf-smalltalk';
+		load
 ]
 
 { #category : #dependencies }
@@ -48,7 +50,7 @@ BaselineOfNats >> neoJSON: spec [
 { #category : #dependencies }
 BaselineOfNats >> protoBuf: spec [
 	spec
-		baseline: 'ProtoBuf'
+		baseline: 'Protobuf'
 		with: [ spec repository: 'github://jvdsandt/protobuf-smalltalk/' ]
 ]
 
