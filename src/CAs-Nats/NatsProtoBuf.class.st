@@ -14,15 +14,23 @@ NatsProtoBuf >> executeRefactoring: refactoring [
 
 { #category : #generate }
 NatsProtoBuf >> pbGen [
-	| pp msgDef refactoring newClass updateRefactoring model |
+	| pp msgDef refactoring newClass updateRefactoring model enumDef |
 	model := RBNamespace new.
 	pp := PBProtobufParser parse: self proto.
-
+	pp enums
+		do: [ :enumNode | 
+			enumDef := (PBSmalltalkEnumType on: enumNode)
+				packageName: 'CAs-Nats-PB';
+				yourself.
+			enumDef generateIn: model.	"Works??"
+			"self executeRefactoring: updateRefactoring" ].
+	self halt.
 	pp messages
 		do: [ :msgNode | 
 			msgDef := (PBSmalltalkMessageType on: msgNode)
 				packageName: 'CAs-Nats-PB';
 				yourself.
+			"use msgDef generateIn: instead ??"
 			refactoring := PBAddMessageClassRefactoring addClassFor: msgDef.
 			refactoring model: model.
 			self executeRefactoring: refactoring.
@@ -34,7 +42,7 @@ NatsProtoBuf >> pbGen [
 			self executeRefactoring: updateRefactoring ]
 ]
 
-{ #category : #generate }
+{ #category : #temp }
 NatsProtoBuf >> pbGen_min [
 	| pp msgDef refactoring newClass updateRefactoring model |
 	model := RBNamespace new.
@@ -200,7 +208,7 @@ message CloseResponse {
 }'
 ]
 
-{ #category : #'grammar-toplevel' }
+{ #category : #temp }
 NatsProtoBuf >> proto_min [
 	^ '// Copyright 2016-2018 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");

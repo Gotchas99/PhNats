@@ -43,11 +43,22 @@ NatsStreamer >> announcer [
 	^ announcer ifNil: [ announcer := Announcer new ]
 ]
 
+{ #category : #initialization }
+NatsStreamer >> clientId [
+^clientId
+]
+
+{ #category : #initialization }
+NatsStreamer >> clientId:aClientId [
+ clientId:= aClientId
+]
+
 { #category : #action }
 NatsStreamer >> close [
 	| closeReq |
 	nc
-		ifNotNil: [ closeReq := CloseRequest new client_id: clientId.
+		ifNotNil: [ subscriptions valuesDo: [ :sub | sub unsubscribe ].subscriptions := Dictionary new.
+			closeReq := CloseRequest new client_id: clientId.
 			nc pub: connectResponse close_requests payload: closeReq asBytes.
 			nc close.
 			nc := nil ]
@@ -75,7 +86,10 @@ NatsStreamer >> connect: anAnnouncement [
 		payload: connReq asBytes
 		action: [ :msg | 
 			connectResponse := ConnectResponse
-				readFrom: (PBCodedReadStream on: (msg at: 'body') asByteArray readStream) ]
+				readFrom: (PBCodedReadStream on: (msg at: 'body') asByteArray readStream).
+			connectResponse error isEmptyOrNil
+				ifTrue: [ self announcer announce: NatsConnect  new..nc logger info: 'Connected' ]
+				ifFalse: [ connectResponse inspect ] ]
 ]
 
 { #category : #'event handler' }
@@ -85,9 +99,8 @@ NatsStreamer >> error: anAnnouncement [
 
 { #category : #'event handler' }
 NatsStreamer >> heartbeat: msg [
-
 	nc pub: (msg at: 'reply').
-	nc logger info:'heartbeat'
+	"nc logger info: 'heartbeat'"
 ]
 
 { #category : #'event handler' }
@@ -104,9 +117,19 @@ NatsStreamer >> initialize [
 	subscriptions:= Dictionary new.
 ]
 
+{ #category : #testing }
+NatsStreamer >> isOpen [ 	
+^nc isNotNil
+]
+
 { #category : #'event handler' }
 NatsStreamer >> msg: aMsg [
-	
+	self halt.
+]
+
+{ #category : #accessing }
+NatsStreamer >> nc [
+	^ nc
 ]
 
 { #category : #initialization }
@@ -153,16 +176,33 @@ NatsStreamer >> pong: aMsg [
 ]
 
 { #category : #api }
-NatsStreamer >> pub: subject msg: aMsg [
+NatsStreamer >> processMsg: incoming [
 	| msg |
-	msg := PubMsg new
+	msg := MsgProto
+		readFrom: (PBCodedReadStream on: (incoming at: 'body') asByteArray readStream).
+		 nc logger info: 'Msg in: ', msg data asString
+]
+
+{ #category : #api }
+NatsStreamer >> pub: innerSubject msg: aMsg [
+	| pubReq subject |
+	subject := connectResponse pub_prefix , '.' , innerSubject.
+	pubReq := PubMsg new
 		client_id: clientId;
 		guid: UUID new asString;
-		subject: subject;
+		subject: innerSubject;
 		data: aMsg asByteArray;
 		conn_id: connId.
-	self flag: 'ackHandler ?'.
-	nc pub: subject payload: msg asBytes
+	nc
+		requestOne: subject
+		payload: pubReq asBytes
+		action: [ :msg | 
+			| pubResp |
+			pubResp := PubAck
+				readFrom: (PBCodedReadStream on: (msg at: 'body') asByteArray readStream).
+			pubResp error isEmptyOrNil
+				ifTrue: [ nc logger debug: 'Pubs ack' ]
+				ifFalse: [ pubResp inspect ] ]
 ]
 
 { #category : #'event handler' }
@@ -177,13 +217,42 @@ NatsStreamer >> subscribe: subject [
 
 { #category : #api }
 NatsStreamer >> subscribe: aSubject queueGroup: aQueueGroup [
-	| sub |
+	| sub subReq |
 	sub := NatsSubscription new
-		nc: nc;
-		sub_requests:connectResponse  sub_requests;
+		stan: self;
+		subject: aSubject;queueGroup: aQueueGroup;subscribe;
+		yourself.
+	
+	subReq := SubscriptionRequest new
+		client_id: clientId;
 		subject: aSubject;
-		queueGroup: aQueueGroup.
-	sub subscribe.
-	subscriptions at: sub inbox put sub.
+		inbox: sub inbox;
+		max_in_flight: 16384;
+		ack_wait_in_secs: 30;
+		start_position: (StartPosition new value: 0).
+	aQueueGroup ifNotNil: [ subReq q_group: aQueueGroup ].
+	nc
+		requestOne: connectResponse sub_requests
+		payload: subReq asBytes
+		action: [ :msg | 
+			| subResp |
+			subResp := SubscriptionResponse
+				readFrom: (PBCodedReadStream on: (msg at: 'body') asByteArray readStream).
+			subResp error isEmptyOrNil
+				ifTrue: [ subscriptions at: sub inbox put: sub.
+					sub ackInbox: subResp ack_inbox.
+					self announcer announce: NatsSubscribe new.
+					nc logger info: 'Subscription confirmed' ]
+				ifFalse: [ subResp inspect ] ].
 	^ sub
+]
+
+{ #category : #accessing }
+NatsStreamer >> unsub_requests [
+	^ connectResponse unsub_requests
+]
+
+{ #category : #api }
+NatsStreamer >> unsubscribe: anInbox [
+	subscriptions removeKey: anInbox ifAbsent:[]
 ]
