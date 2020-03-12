@@ -226,12 +226,12 @@ NatsClient >> open [
 	stick
 		onConnected: [ stick logger info: 'connected'.
 			controlStream := ReadWriteStream on: ByteArray new.
-			msgStream := ReadWriteStream on: ByteArray new .
-			self registerSubscriptions].
+			msgStream := ReadWriteStream on: ByteArray new.
+			self registerSubscriptions ].
 	stick onClosed: [ stick logger info: 'closed' ].
 	stick
 		onError: [ :ex | 
-			stick logger info: 'error ' , ex printString.
+			stick logger error: 'error ' , ex printString.
 			ex isReconnectEnded
 				ifTrue: [ stick stick ] ].
 	stick onData: self controlBlock.
@@ -262,16 +262,17 @@ NatsClient >> pong: aLine [
 { #category : #protocol }
 NatsClient >> processControl: aLine [
 	| op method |
-	aLine isEmpty ifTrue:[^self].
+	aLine isEmpty
+		ifTrue: [ ^ self ].
 	op := (aLine asString findTokens: Character separators) first
 		onlyLetters asLowercase.
 	method := (op , ':') asSymbol.
-(		incomingMessagetypes includes: method)ifTrue:
-[	stick logger
-		info: 'processing cmd: ' , method , ', with line: ' , aLine.
-	self perform: method with: aLine]ifFalse:[	stick logger
-		error: 'Invalid cmd: ' , method , ', with line: ' , aLine.
-]
+	(incomingMessagetypes includes: method)
+		ifTrue: [ stick logger
+				debug: 'processing cmd: ' , method , ', with line: ' , aLine.
+			self perform: method with: aLine ]
+		ifFalse: [ stick logger
+				error: 'Invalid cmd: ' , method , ', with line: ' , aLine ]
 ]
 
 { #category : #protocol }
